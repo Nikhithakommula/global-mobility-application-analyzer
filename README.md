@@ -4,7 +4,7 @@ An AI/ML-based decision-support system that predicts visa application outcomes u
 
 ## About the Project
 
-GMAA (Global Mobility Application Assessment) is a machine learning project designed to analyze visa application data and predict whether an application is likely to be **Certified or Denied**.
+GMAA (Global Mobility Application Analyzer) is a machine learning project designed to analyze visa application data and predict whether an application is likely to be **Certified or Denied**.
 
 The system uses historical application data to identify patterns, generate predictions, explain model outputs, and flag uncertain cases for human review.
 
