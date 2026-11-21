@@ -1,4 +1,4 @@
-# GMAA – Global Mobility Application Assessment
+# GMAA – Global Mobility Application Analyzer
 
 An AI/ML-based decision-support system that predicts visa application outcomes using machine learning, explainable AI, fairness analysis, and confidence-based human review.
 
