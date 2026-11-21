@@ -8,7 +8,7 @@ GMAA (Global Mobility Application Assessment) is a machine learning project desi
 
 The system uses historical application data to identify patterns, generate predictions, explain model outputs, and flag uncertain cases for human review.
 
-**Note:** GMAA is an academic decision-support prototype. Its predictions are not official immigration decisions or legal advice.
+
 
 ## Key Features
 
