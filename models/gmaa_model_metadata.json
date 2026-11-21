@@ -1,0 +1,40 @@
+{
+    "project": "GMAA",
+    "system_name": "GMAA - Global Mobility Application Assessment",
+    "model": "LightGBM",
+    "model_type": "Binary Classification",
+    "target": "case_status",
+    "classes": {
+        "0": "Denied",
+        "1": "Certified"
+    },
+    "test_samples": 5090,
+    "metrics": {
+        "accuracy": 0.7536345776031435,
+        "precision": 0.7802140433307231,
+        "recall": 0.8788591590708615,
+        "f1_score": 0.8266039823008849,
+        "roc_auc": 0.7894225029416173
+    },
+    "human_review": {
+        "lower_threshold": 0.3,
+        "upper_threshold": 0.7
+    },
+    "decision_rules": {
+        "probability_below_0_30": "AUTOMATIC - DENIED",
+        "probability_between_0_30_and_0_70": "HUMAN REVIEW",
+        "probability_above_0_70": "AUTOMATIC - CERTIFIED"
+    },
+    "explainability": {
+        "method": "SHAP",
+        "explainer": "TreeExplainer"
+    },
+    "fairness": {
+        "analysis": [
+            "job experience",
+            "education",
+            "continent",
+            "region of employment"
+        ]
+    }
+}
