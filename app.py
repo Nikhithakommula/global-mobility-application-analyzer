@@ -1,14 +1,15 @@
 # ============================================================
 # GMAA - GLOBAL MOBILITY APPLICATION ASSESSMENT
-# Streamlit Application
+# Explainable and Fairness-Aware Streamlit Application
 # ============================================================
+
+import os
+import json
 
 import streamlit as st
 import pandas as pd
 import joblib
 import shap
-import os
-import json
 
 from src.decision_engine import get_decision
 from src.explainability import get_shap_explanation
@@ -19,7 +20,7 @@ from src.explainability import get_shap_explanation
 # ============================================================
 
 st.set_page_config(
-    page_title="GMAA - Visa Application Assessment", page_icon="🌍", layout="wide"
+    page_title="GMAA - Visa Application Assessment", page_icon="G", layout="wide"
 )
 
 
@@ -33,15 +34,20 @@ MODEL_PATH = os.path.join(BASE_DIR, "models", "gmaa_final_lightgbm_pipeline.jobl
 
 METADATA_PATH = os.path.join(BASE_DIR, "models", "gmaa_model_metadata.json")
 
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
+
+GROUP_METRICS_PATH = os.path.join(REPORTS_DIR, "fairness_group_metrics.csv")
+
+DISPARITY_PATH = os.path.join(REPORTS_DIR, "fairness_disparity_summary.csv")
+
 
 # ============================================================
-# LOAD MODEL
+# LOAD MODEL AND SUPPORTING COMPONENTS
 # ============================================================
 
 
 @st.cache_resource
 def load_model():
-
     return joblib.load(MODEL_PATH)
 
 
@@ -68,8 +74,23 @@ def load_metadata():
     return {}
 
 
+@st.cache_data
+def load_fairness_reports():
+
+    group_metrics = None
+    disparity_summary = None
+
+    if os.path.exists(GROUP_METRICS_PATH):
+        group_metrics = pd.read_csv(GROUP_METRICS_PATH)
+
+    if os.path.exists(DISPARITY_PATH):
+        disparity_summary = pd.read_csv(DISPARITY_PATH)
+
+    return group_metrics, disparity_summary
+
+
 # ============================================================
-# LOAD EVERYTHING
+# LOAD APPLICATION COMPONENTS
 # ============================================================
 
 try:
@@ -81,16 +102,16 @@ try:
 
     model_loaded = True
 
-except Exception as e:
+except Exception as error:
     model_loaded = False
-    load_error = str(e)
+    load_error = str(error)
 
 
 # ============================================================
 # HEADER
 # ============================================================
 
-st.title("🌍 GMAA")
+st.title("GMAA")
 
 st.subheader("Global Mobility Application Assessment")
 
@@ -105,14 +126,13 @@ st.write(
 # ============================================================
 
 if not model_loaded:
-    st.error("Final GMAA model could not be loaded.")
+    st.error("The final GMAA model could not be loaded.")
 
     st.code(load_error)
 
     st.stop()
 
-else:
-    st.success("✓ Final LightGBM model loaded successfully")
+st.success("Final LightGBM model loaded successfully.")
 
 
 # ============================================================
@@ -121,29 +141,34 @@ else:
 
 st.sidebar.title("GMAA")
 
-st.sidebar.write("Enter application details and evaluate the application.")
+st.sidebar.write("Enter application details to evaluate an application.")
 
 st.sidebar.divider()
 
-st.sidebar.write("### Decision Policy")
+st.sidebar.subheader("Decision Policy")
 
-st.sidebar.write("Probability > 0.70\n\n→ Automatic Certified")
+st.sidebar.write("Probability above 0.70: Automatic Certified")
 
-st.sidebar.write("Probability 0.30–0.70\n\n→ Human Review")
+st.sidebar.write("Probability from 0.30 to 0.70: Human Review")
 
-st.sidebar.write("Probability < 0.30\n\n→ Automatic Denied")
+st.sidebar.write("Probability below 0.30: Automatic Denied")
+
+st.sidebar.divider()
+
+st.sidebar.caption(
+    "GMAA is a machine learning decision-support prototype. "
+    "It does not replace official visa adjudication."
+)
 
 
 # ============================================================
 # APPLICATION INPUT
 # ============================================================
 
-st.header("📋 Application Information")
+st.header("Application Information")
 
 col1, col2 = st.columns(2)
 
-
-# COLUMN 1
 
 with col1:
     continent = st.selectbox(
@@ -164,16 +189,13 @@ with col1:
     )
 
 
-# COLUMN 2
-
 with col2:
     yr_of_estab = st.number_input(
         "Year of Establishment", min_value=1800, max_value=2026, value=2005, step=1
     )
 
     region = st.selectbox(
-        "Region of Employment",
-        ["Midwest", "Northeast", "South", "West", "Island", "Other"],
+        "Region of Employment", ["Midwest", "Northeast", "South", "West", "Island"]
     )
 
     prevailing_wage = st.number_input(
@@ -212,10 +234,10 @@ application = pd.DataFrame(
 
 
 # ============================================================
-# ASSESS APPLICATION
+# APPLICATION ASSESSMENT
 # ============================================================
 
-if st.button("🔍 Assess Application", type="primary", use_container_width=True):
+if st.button("Assess Application", type="primary", use_container_width=True):
     try:
         # ----------------------------------------------------
         # MODEL PREDICTION
@@ -237,18 +259,13 @@ if st.button("🔍 Assess Application", type="primary", use_container_width=True
 
         if probability_certified >= 0.50:
             prediction = "Certified"
-
         else:
             prediction = "Denied"
-
-        # ----------------------------------------------------
-        # CONFIDENCE
-        # ----------------------------------------------------
 
         confidence = max(probability_certified, probability_denied)
 
         # ----------------------------------------------------
-        # GMAA DECISION ENGINE
+        # DECISION ENGINE
         # ----------------------------------------------------
 
         decision_result = get_decision(probability_certified)
@@ -257,13 +274,13 @@ if st.button("🔍 Assess Application", type="primary", use_container_width=True
 
         decision_reason = decision_result["reason"]
 
-        # ====================================================
+        # ----------------------------------------------------
         # ASSESSMENT RESULT
-        # ====================================================
+        # ----------------------------------------------------
 
         st.divider()
 
-        st.header("📊 GMAA Assessment Result")
+        st.header("GMAA Assessment Result")
 
         result_col1, result_col2, result_col3 = st.columns(3)
 
@@ -278,124 +295,214 @@ if st.button("🔍 Assess Application", type="primary", use_container_width=True
         with result_col3:
             st.metric("Confidence", f"{confidence * 100:.2f}%")
 
-        # ====================================================
-        # DECISION
-        # ====================================================
+        # ----------------------------------------------------
+        # DECISION RESULT
+        # ----------------------------------------------------
+
+        st.subheader("GMAA Decision")
 
         if gmaa_decision == "AUTOMATIC - CERTIFIED":
-            st.success(f"### ✅ {gmaa_decision}")
+            st.success(gmaa_decision)
 
         elif gmaa_decision == "AUTOMATIC - DENIED":
-            st.error(f"### ❌ {gmaa_decision}")
+            st.error(gmaa_decision)
 
         else:
-            st.warning(f"### 👤 {gmaa_decision}")
+            st.warning("HUMAN REVIEW REQUIRED")
 
-        st.write(f"**Reason:** {decision_reason}")
+        st.write(decision_reason)
 
-        # ====================================================
-        # PROBABILITY BAR
-        # ====================================================
+        if gmaa_decision == "HUMAN REVIEW":
+            st.info(
+                "This application falls within the uncertainty "
+                "range. A human reviewer should examine the "
+                "application and supporting information before "
+                "making a final decision."
+            )
 
-        st.subheader("🎯 Prediction Probability")
-
-        probability_df = pd.DataFrame(
-            {"Probability": [probability_denied, probability_certified]},
-            index=["Denied", "Certified"],
-        )
-
-        st.bar_chart(probability_df)
-
-        # ====================================================
-        # APPLICATION DETAILS
-        # ====================================================
-
-        with st.expander("📋 View Application Details"):
-            st.dataframe(application, use_container_width=True)
-
-        # ====================================================
+        # ----------------------------------------------------
         # SHAP EXPLAINABILITY
-        # ====================================================
+        # ----------------------------------------------------
 
         st.divider()
 
-        st.header("🔎 Explainable AI - SHAP Analysis")
+        st.header("Explainability - SHAP Analysis")
 
         try:
-            shap_result = get_shap_explanation(
-                explainer=explainer,
-                preprocessor=preprocessor,
-                application=application,
-                class_index=certified_index,
+            explanation = get_shap_explanation(
+                explainer, preprocessor, application, class_index=certified_index
             )
 
-            top_features = shap_result["top_features"]
+            st.write(
+                "The following features show how the model's "
+                "prediction is influenced for this application."
+            )
 
-            positive_features = shap_result["positive_features"]
+            st.subheader("Top Influencing Features")
 
-            negative_features = shap_result["negative_features"]
+            st.dataframe(
+                explanation["top_features"], use_container_width=True, hide_index=True
+            )
 
-            # TOP 10 FEATURES
+            positive_features = explanation["positive_features"]
 
-            st.subheader("Top Factors Influencing This Prediction")
+            negative_features = explanation["negative_features"]
 
-            st.dataframe(top_features, use_container_width=True, hide_index=True)
+            positive_col, negative_col = st.columns(2)
 
-            # POSITIVE AND NEGATIVE CONTRIBUTIONS
+            with positive_col:
+                st.subheader("Factors Supporting Certification")
 
-            exp_col1, exp_col2 = st.columns(2)
+                st.dataframe(
+                    positive_features, use_container_width=True, hide_index=True
+                )
 
-            with exp_col1:
-                st.subheader("Factors Supporting Certified")
+            with negative_col:
+                st.subheader("Factors Opposing Certification")
 
-                if not positive_features.empty:
-                    for _, row in positive_features.iterrows():
-                        st.write(f"**{row['Feature']}** → +{row['SHAP Value']:.4f}")
+                st.dataframe(
+                    negative_features, use_container_width=True, hide_index=True
+                )
 
-                else:
-                    st.write("No positive SHAP contributions.")
-
-            with exp_col2:
-                st.subheader("Factors Supporting Denied")
-
-                if not negative_features.empty:
-                    for _, row in negative_features.iterrows():
-                        st.write(f"**{row['Feature']}** → {row['SHAP Value']:.4f}")
-
-                else:
-                    st.write("No negative SHAP contributions.")
+            st.caption(
+                "Positive SHAP values push the model output toward "
+                "Certified; negative values push it away. These "
+                "values explain this prediction and do not establish "
+                "causation."
+            )
 
         except Exception as shap_error:
-            st.warning("SHAP explanation could not be generated.")
-
-            st.code(str(shap_error))
-
-        # ====================================================
-        # HUMAN REVIEW MESSAGE
-        # ====================================================
-
-        if gmaa_decision == "HUMAN REVIEW":
-            st.divider()
-
             st.warning(
-                """
-                ### 👤 Human Review Required
-
-                This application falls within the uncertainty
-                range of the GMAA decision engine.
-
-                The system does not make an automatic final decision
-                for uncertain applications.
-
-                A human reviewer should examine the application
-                and supporting information before making the final decision.
-                """
+                "The prediction was completed, but SHAP explanation "
+                "could not be generated."
             )
+
+            st.exception(shap_error)
 
     except Exception as prediction_error:
         st.error("Application assessment could not be completed.")
 
         st.exception(prediction_error)
+
+
+# ============================================================
+# FAIRNESS ANALYSIS
+# ============================================================
+
+st.divider()
+
+st.header("Group Fairness Analysis")
+
+st.write(
+    "This section presents model performance across different "
+    "applicant groups using the saved test-set evaluation reports."
+)
+
+try:
+    group_metrics, disparity_summary = load_fairness_reports()
+
+    if group_metrics is None or disparity_summary is None:
+        st.warning(
+            "Fairness reports are not available. Run "
+            "`python -m src.run_fairness` to generate them."
+        )
+
+    else:
+        # ----------------------------------------------------
+        # GROUP-WISE METRICS
+        # ----------------------------------------------------
+
+        st.subheader("Group-wise Performance Metrics")
+
+        available_groups = sorted(group_metrics["Group Feature"].dropna().unique())
+
+        selected_group = st.selectbox("Select Applicant Group", available_groups)
+
+        selected_metrics = group_metrics[
+            group_metrics["Group Feature"] == selected_group
+        ].copy()
+
+        percentage_columns = [
+            "Actual Certified Rate",
+            "Selection Rate",
+            "Accuracy",
+            "Precision",
+            "TPR",
+            "FPR",
+            "FNR",
+            "F1 Score",
+        ]
+
+        st.dataframe(
+            selected_metrics.style.format(
+                {column: "{:.2%}" for column in percentage_columns}
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.download_button(
+            label="Download Group-wise Metrics CSV",
+            data=group_metrics.to_csv(index=False).encode("utf-8"),
+            file_name="fairness_group_metrics.csv",
+            mime="text/csv",
+        )
+
+        # ----------------------------------------------------
+        # DISPARITY SUMMARY
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.subheader("Fairness Disparity Summary")
+
+        st.write(
+            "The gap represents the maximum group metric minus "
+            "the minimum group metric for each applicant feature."
+        )
+
+        gap_columns = [
+            column for column in disparity_summary.columns if column.endswith("Gap")
+        ]
+
+        st.dataframe(
+            disparity_summary.style.format(
+                {column: "{:.2%}" for column in gap_columns}
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.download_button(
+            label="Download Disparity Summary CSV",
+            data=disparity_summary.to_csv(index=False).encode("utf-8"),
+            file_name="fairness_disparity_summary.csv",
+            mime="text/csv",
+        )
+
+        # ----------------------------------------------------
+        # INTERPRETATION
+        # ----------------------------------------------------
+
+        st.info(
+            "A larger metric gap indicates a difference in model "
+            "performance between the evaluated groups. It is a "
+            "signal for further investigation, not proof of "
+            "discrimination or a legal fairness conclusion."
+        )
+
+        st.caption(
+            "These metrics describe model predictions on the test "
+            "dataset. They do not represent actual visa decisions "
+            "or the outcome of the GMAA human-review policy. "
+            "Group sizes should also be considered when interpreting "
+            "the results."
+        )
+
+except Exception as fairness_error:
+    st.error("Fairness reports could not be displayed.")
+
+    st.exception(fairness_error)
 
 
 # ============================================================
